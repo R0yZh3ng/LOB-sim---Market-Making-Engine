@@ -18,8 +18,8 @@ struct OrderNode {
 public:
   unsigned long orderId; 
   unsigned int quantity;
-  Node* next;
-  Node* previous;
+  OrderNode* next;
+  OrderNode* previous;
 
   OrderNode(unsigned int q);
   

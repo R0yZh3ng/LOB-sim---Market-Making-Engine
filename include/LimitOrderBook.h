@@ -5,4 +5,27 @@
 // GetVolumeAtPrice(price, buyingOrSelling) - Get volume of open orders for either buying or selling side of order book 
 // 
   
+#ifndef LIMITORDERBOOK.H
+#define LIMITORDERBOOK.H  
+  
+
+struct LimitOrderBook {
+private:
+    std::map<double, PriceLevel> levels;
+    std::unordered_maps<uint64_t, OrderNode* n> orderHashMap;
+    //maintaining two maps to ensure fast lookup in case of deletions and order changes
+    //O(1) worst case compared to O(n) worst case with a ordered map, memory overhead is negligible
+
+    uint64_t totalVolume;
+  
+public:
+    LimitOrderBook();
+  
+    void placeLimitOrder(double price, uint64_t quantity);
+    void matchMarketOrder(uint64_t quantity);
+    void cancelOrder(uint64_t orderId);
+    int getBestPrice() const;
+    int getVolumeAtPrice(double p) const;
+
 }
+#endif
