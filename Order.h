@@ -1,11 +1,11 @@
 // Order class design
 // 
 // REQUIRES:
-//  - orderId 
-//  - datetime timestamp
-//  - buyOrSellEnum side  
-//  - price
-//  - volume
+// - orderID
+// - quantity
+// - node pointer to previous
+// - node pointer to next
 //
-//  and corresponding getters and setterss, useful to store order state all in one place,
-//  all the variables should be private
+//
+
+#ifndef 
