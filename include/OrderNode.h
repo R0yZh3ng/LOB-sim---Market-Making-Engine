@@ -18,7 +18,7 @@ struct OrderNode {
 public:
   unsigned long orderId; 
   unsigned int quantity;
-  int side; //0 is sell, 1 is buy
+  bool side; //0(false) is sell, 1 (true) is buy, but can assign directly as true or false
   time_t dataTime;
 
   OrderNode* next;

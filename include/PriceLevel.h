@@ -1,5 +1,5 @@
 #ifndef PRICELEVEL_H
-#define PRIRCELEVEL_H 
+#define PRICELEVEL_H 
 
 // #include "OrderNode.h" this is not needed if only using pointers of the struct, also avoid circular dependencies
 #include <cstdint>
@@ -24,7 +24,7 @@ struct PriceLevel {
     OrderNode* peekHead();
     void popHead();
 
-    bool isEmpty();
+    bool isEmpty(); //bool is avaiable but the return value is 0 for false and 1 for true, can assign the true and false to it directly
 }
 
 #endif
