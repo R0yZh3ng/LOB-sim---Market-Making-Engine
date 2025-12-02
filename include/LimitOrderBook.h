@@ -15,8 +15,7 @@ struct LimitOrderBook {
 private:
     std::map<double, PriceLevel*> bidLevels; //descending because this is the buy side
     std::map<double, PriveLevel*> askLevels; //ascending because thit si the sell sied
-    std::unordered_map<uint64_t, OrderNode*> bidLevelHashMap;
-    std::unordered_map<uint64_t, OrderNode*> askLevelHashMap;
+    std::unordered_map<uint64_t, OrderNode*> OrderHashMap; //does not need two of these because this is only mean to do fast lookup, so add both ask and bid orders in here too.
     //maintaining two maps to ensure fast lookup in case of deletions and order changes
     //O(1) worst case compared to O(n) worst case with a ordered map, memory overhead is negligible
 
