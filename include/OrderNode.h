@@ -11,17 +11,21 @@
 #ifndef ORDERNODE_H
 #define ORDERNODE_H 
 // header guards to prevent duplicate definitionns if the file is included multiple times
-
+#include <ctime>
 
 struct OrderNode {
 
 public:
   unsigned long orderId; 
   unsigned int quantity;
+  int side; //0 is sell, 1 is buy
+  time_t dataTime;
+
   OrderNode* next;
   OrderNode* previous;
+  PriceLevel* priceLevel;
 
-  OrderNode(unsigned int q);
+  OrderNode(unsigned int q); //constructor
   
   void setQuantity(unsigned int q);
   void reduceQuantity(unsigned int amt);
