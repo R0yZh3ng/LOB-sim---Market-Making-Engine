@@ -29,7 +29,7 @@ public:
   OrderNode* next;
   OrderNode* previous;
 
-  OrderNode(unsigned int q, Side s);
+  OrderNode(unsigned int q, uint64_t id, Side s);
 
 
 };
