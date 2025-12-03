@@ -22,12 +22,14 @@ enum struct Side {
 struct OrderNode {
 
 public:
+  uint64_t price;
   uint64_t orderId; 
   unsigned int quantity;
   Side side;
 
   OrderNode* next;
   OrderNode* previous;
+  PriceLevel* parentLevel;
 
   OrderNode(unsigned int q, uint64_t id, Side s);
 
