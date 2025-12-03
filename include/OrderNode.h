@@ -14,15 +14,22 @@
 
 #include <cstdint> // for uint64_t
 
+enum struct Side {
+  BUY,
+  SELL
+} //enum struct is just a way of naming a variable type so youre not stuck with conventional types that are unclear, like using bool or 0 and 1 for this type of situation here
+
 struct OrderNode {
 
 public:
   uint64_t orderId; 
   unsigned int quantity;
+  Side side;
+
   OrderNode* next;
   OrderNode* previous;
 
-  OrderNode(unsigned int q);
+  OrderNode(unsigned int q, Side s);
 
 
 };

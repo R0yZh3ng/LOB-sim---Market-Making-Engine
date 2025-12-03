@@ -3,7 +3,7 @@
 #include <cstdint>
 
 
-OrderNode::OrderNode(unsigned int q) : orderId(next_id++), quantity(q), next(nullptr), previous(nullptr) {}
+OrderNode::OrderNode(unsigned int q, uint64_t Side s) : orderId(id), quantity(q), side(s), next(nullptr), previous(nullptr) {}
 // this is the optimal way to write a constructor as it assigns at construction which makes it faster and is required for const, references, or memebers without default constructors
 // every production c++ codebase uses this format
 
