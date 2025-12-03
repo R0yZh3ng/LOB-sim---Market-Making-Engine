@@ -8,6 +8,8 @@
 #ifndef LIMITORDERBOOK_H
 #define LIMITORDERBOOK_H
 
+#include "OrderNode.h"
+
 #include <cstdint>
   
 
@@ -20,14 +22,16 @@ private:
     //O(1) worst case compared to O(n) worst case with a ordered map, memory overhead is negligible
 
     uint64_t totalVolume;
-  
+
+    void placeOrder(double price, uint64_t quantity, Side side);
+    void removePriceLevelIfEmpty(double price); 
 public:
     LimitOrderBook();
   
-    void placeLimitOrder(double price, uint64_t quantity);
-    void matchMarketOrder(uint64_t quantity);
+    void placeLimitOrder(double price, uint64_t quantity, Side side);
+    void placeMarketOrder(uint64_t quantity, Side side);
     void cancelOrder(uint64_t orderId);
-    int getBestPrice() const;
+    double getBestPrice(Side side) const;
     uint64_t getVolumeAtPrice(double p) const;
 
 }
