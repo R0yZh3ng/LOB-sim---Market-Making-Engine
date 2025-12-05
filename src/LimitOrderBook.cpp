@@ -53,6 +53,24 @@ void LimitOrderBook::cancelOrder(uint_64_t orderId) {
  //note to self need to implement the remove price level logic later
 }
 
+  void modifyOrder(double price, uint64_t orderId, uint64_t quantity) {
+  //side should not be able to be changed, since it breaks market integrity with possible fast change liquidity 
+  
+  OrderNode* order = OrderHashMap[orderId];
+
+  double originalPrice = order->price;
+  uint64_t originalQuantity = order->quantity;
+
+  order->price = price;
+  order->quantity = quantity;
+
+  if (originalPrice != price || originalQuantity < quantity) {
+    OrderHashMap[price].removeOrder(order);
+    OrderHashMap[price].addOrder(order);
+  }
+
+}
+
 double LimitOrderBook::getBestPrice(Side side) const {
   if (side == side::BUY) {
     if (askLevels.empty()) {

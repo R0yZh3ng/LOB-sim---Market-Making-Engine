@@ -34,6 +34,7 @@ public:
     void placeLimitOrder(double price, uint64_t quantity, Side side);
     void placeMarketOrder(uint64_t quantity, Side side);
     void cancelOrder(uint64_t orderId);
+    void modifyOrder(double price, uint64_t orderId, uint64_t quantity, Side side);
     double getBestPrice(Side side) const;
     uint64_t getVolumeAtPrice(double p) const;
 
