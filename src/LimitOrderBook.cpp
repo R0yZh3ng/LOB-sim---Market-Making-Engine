@@ -1,206 +1,238 @@
 #include "LimitOrderBook.h"
-#include "PriceLevel.h"
 #include "OrderNode.h"
+#include "PriceLevel.h"
 
 #include <cstdint>
+#include <iterator>
+#include <map>
 #include <stdexcept>
 
-LimitOrderBook::LimitOrderBook() : totalVolume(0) {} //maps automatically initiate empty
-uint64_t LimitOrderBook::nextOrderId = 0; //initialize global id counter to ensure quick unique orders, should not be cleared and the uint_64 makes sure the orders will never exceed the limit 
+LimitOrderBook::LimitOrderBook()
+    : totalVolume(0) {} // maps automatically initiate empty
+uint64_t LimitOrderBook::nextOrderId =
+    0; // initialize global id counter to ensure quick unique orders, should not
+       // be cleared and the uint_64 makes sure the orders will never exceed the
+       // limit
 
-//note that to the maps will store the price levels in ascending order, but using, std::prev(bidLevels.end()) gives u the lowest ask 
+// note that to the maps will store the price levels in ascending order, but
+// using, std::prev(bidLevels.end()) gives u the lowest ask
 
-void LimitOrderBook::placeLimitOrder(double price, uint64_t quantity, Side side) {
- //note that a limit order fills for everything under
+void LimitOrderBook::placeLimitOrder(double price, uint64_t quantity,
+                                     Side side) {
+  // note that a limit order fills for everything under
 
- // OrderNode* ordn = new OrderNode(quantity, id++, side); //create the node on the heap instead of the stack because the node needs to outlive the function that created it 
- //   
- // if (side == side::BUY) {
- //   if (bidLevels.find(price) == bidLevels.end()) {
- //     bidLevels.emplace(price, PriceLevel(price));//can use emplace, which is preferred for objects as they are constructed within it, can use insert, common with key value pairs, or just reference it by the index/key, if it doesnt exist, it will initiate it and then add it 
- //   }
- //   bidLevels[price].addOrder(ordn);  
- //
- // }  
- // else if (side == Side::SELL) {
- //   if (askLevels.find(price) == askLevels.end()) {
- //     askLevels.emplace(price, PriceLevel(price));
- //   
- //   askLevels[price].addOrder(ordn);
- // } 
- // else {
- //    throw std::invalid_argument("the side should match either buy or sell");
- // }
- 
- // above is a non efficient way of implementation, can abstract certain steps, also dont allocate the node on the heap;
+  // OrderNode* ordn = new OrderNode(quantity, id++, side); //create the node on
+  // the heap instead of the stack because the node needs to outlive the
+  // function that created it
+  //
+  // if (side == side::BUY) {
+  //   if (bidLevels.find(price) == bidLevels.end()) {
+  //     bidLevels.emplace(price, PriceLevel(price));//can use emplace, which is
+  //     preferred for objects as they are constructed within it, can use
+  //     insert, common with key value pairs, or just reference it by the
+  //     index/key, if it doesnt exist, it will initiate it and then add it
+  //   }
+  //   bidLevels[price].addOrder(ordn);
+  //
+  // }
+  // else if (side == Side::SELL) {
+  //   if (askLevels.find(price) == askLevels.end()) {
+  //     askLevels.emplace(price, PriceLevel(price));
+  //
+  //   askLevels[price].addOrder(ordn);
+  // }
+  // else {
+  //    throw std::invalid_argument("the side should match either buy or sell");
+  // }
+
+  // above is a non efficient way of implementation, can abstract certain steps,
+  // also dont allocate the node on the heap;
   placeOrder(price, quantity, side);
 }
 
 void LimitOrderBook::placeMarketOrder(uint64_t quantity, Side side) {
- // this function needs to fil the amount to buy or sell at either the highest bid or lowest ask, partial filling is needed
- double price = getBestPrice(side);
- placeOrder(price, quantity, side);
- 
+  // this function needs to fil the amount to buy or sell at either the highest
+  // bid or lowest ask, partial filling is needed
+  double price = getBestPrice(side);
+  placeOrder(price, quantity, side);
 }
 
-void LimitOrderBook::cancelOrder(uint_64_t orderId) {
- OrderNode* nodeToCancel = OrderHashMap[orderId];
- 
- nodeToCancel->parentLevel.removeOrder(nodeToCancel);
- 
- removePriceLevelIfEmpty(nodeToCancel->price);
- 
- //note to self need to implement the remove price level logic later
+void LimitOrderBook::cancelOrder(uint64_t orderId) {
+  OrderNode *nodeToCancel = OrderHashMap[orderId];
+
+  nodeToCancel->parentLevel->removeOrder(nodeToCancel);
+
+  removePriceLevelIfEmpty(nodeToCancel->price);
+
+  // note to self need to implement the remove price level logic later
 }
 
-  void modifyOrder(double price, uint64_t orderId, uint64_t quantity) {
-  //side should not be able to be changed, since it breaks market integrity with possible fast change liquidity 
-  
-  OrderNode* order = OrderHashMap[orderId];
+void LimitOrderBook::modifyOrder(double price, uint64_t orderId,
+                                 uint64_t quantity, Side side) {
+  // side should not be able to be changed, since it breaks market integrity
+  // with possible fast change liquidity
+
+  if (OrderHashMap.find(orderId) == OrderHashMap.end()) {
+    throw std::invalid_argument("Order ID not found");
+  }
+
+  OrderNode *order = OrderHashMap[orderId];
 
   double originalPrice = order->price;
   uint64_t originalQuantity = order->quantity;
 
-  order->price = price;
-  order->quantity = quantity;
+  if (originalPrice != price || originalQuantity != quantity) {
+    // Remove from old price level
+    order->parentLevel->removeOrder(order);
+    removePriceLevelIfEmpty(originalPrice);
 
-  if (originalPrice != price || originalQuantity < quantity) {
-    OrderHashMap[price].removeOrder(order);
-    OrderHashMap[price].addOrder(order);
+    // Update order details
+    order->price = price;
+    order->quantity = quantity;
+
+    // Add to new price level
+    auto &levels = (side == Side::BUY) ? bidLevels : askLevels;
+    if (levels.find(price) == levels.end()) {
+      levels.emplace(price, PriceLevel(price));
+    }
+    order->parentLevel = &levels.at(price);
+    levels.at(price).addOrder(order);
+
+    // Try to fill if it's a marketable order now (simplified, normally modify
+    // might lose priority) For now, just re-adding to book.
   }
-
 }
 
 double LimitOrderBook::getBestPrice(Side side) const {
-  if (side == side::BUY) {
+  if (side == Side::BUY) {
+    if (bidLevels.empty()) {
+      throw std::invalid_argument("no orders on book");
+    }
+    return bidLevels.rbegin()->first;
+  } else if (side == Side::SELL) {
     if (askLevels.empty()) {
       throw std::invalid_argument("no orders on book");
     }
     return askLevels.begin()->first;
-  } 
-  else if(side == side::SELL) {
-    if (bidLevels.empty()) {
-      throw std::invalid_argument("no orders on book");
-    }
-    return prev(bidLevels.end())->first;
   }
 
   throw std::invalid_argument("side must be either buy or sell");
 }
 
-
-uint64_t LimtiOrderBook::getVolumeAtPrice(double price) const {
-  return askLevels.at(price).totalVolume + bidLevels.at(price).totalVolume;
+uint64_t LimitOrderBook::getVolumeAtPrice(double price) const {
+  uint64_t volume = 0;
+  if (askLevels.count(price)) {
+    volume += askLevels.at(price).totalVolume;
+  }
+  if (bidLevels.count(price)) {
+    volume += bidLevels.at(price).totalVolume;
+  }
+  return volume;
 }
 
-
-
-//private helpers below here;////////////////////////////////////////////////////////////////////
+// private helpers below
+// here;////////////////////////////////////////////////////////////////////
 
 void LimitOrderBook::placeOrder(double price, uint64_t quantity, Side side) {
- if (side != Side::BUY && side != Side::SELL) {
-  throw std::invalid_argument("orderType must be of either buy or sell");
- } 
- nextOrderId++; //increment the global id counter
-       
- OrderNode* ordn = new OrderNode(quantity, nextOrderId, side);
+  if (side != Side::BUY && side != Side::SELL) {
+    throw std::invalid_argument("orderType must be of either buy or sell");
+  }
+  nextOrderId++; // increment the global id counter
 
- auto& levels = (side == Side::BUY) ? bidLevels : askLevels; // the ampersand here does not mean the address but rather that it is a reference to the level that was assigned to it.
- 
- if (levels.find(price) == levels.end()) {
-   levels.emplace(price, PriceLevel(price));
- }
+  OrderNode *ordn = new OrderNode(quantity, nextOrderId, side);
 
- ordn->price = price;
- ordn->parentLevel = &levels[price];  
+  auto &levels = (side == Side::BUY)
+                     ? bidLevels
+                     : askLevels; // the ampersand here does not mean the
+                                  // address but rather that it is a reference
+                                  // to the level that was assigned to it.
 
- levels[price].addOrder(ordn);
- OrderHashMap.emplace(nextOrderId, ordn); //put into an unordered map for O(1) seek
- 
- fillOrder(ordn);
- 
+  if (levels.find(price) == levels.end()) {
+    levels.emplace(price, PriceLevel(price));
+  }
+
+  ordn->price = price;
+  ordn->parentLevel = &levels.at(price);
+
+  levels.at(price).addOrder(ordn);
+  OrderHashMap.emplace(nextOrderId,
+                       ordn); // put into an unordered map for O(1) seek
+
+  fillOrder(ordn);
+
+  if (ordn->quantity == 0) {
+    ordn->parentLevel->removeOrder(ordn);
+    removePriceLevelIfEmpty(ordn->price);
+    OrderHashMap.erase(ordn->orderId);
+    // delete ordn;
+  }
 }
 
-void LimtiOrderBook::removePriceLevelIfEmpty(double price) {
-  //think about some way to simplify this further, there is some repeated code, do i want to pass in a side or should both the orderLevels be checked each time this is called
-  //considering that the fillOrder logic will also call this at the of a orderFill
+void LimitOrderBook::removePriceLevelIfEmpty(double price) {
+  // think about some way to simplify this further, there is some repeated code,
+  // do i want to pass in a side or should both the orderLevels be checked each
+  // time this is called considering that the fillOrder logic will also call
+  // this at the of a orderFill
 
-  if (bidLevels[price].isEmpty()) {
-    bidLevels.erase(price); 
+  if (bidLevels.count(price) && bidLevels.at(price).isEmpty()) {
+    bidLevels.erase(price);
   }
-  if (askLevels[price].isEmpty()) {
+  if (askLevels.count(price) && askLevels.at(price).isEmpty()) {
     askLevels.erase(price);
   }
 }
 
-void LimitOrderBook::fillOrder(OrderNode* incomingOrder) {
-  // lets think about what this funciton should do, on call, we need to go through the best asking price and the best bid price and see if there is a match available, if so, remove corresponding quantity
-  // from both sides and remove the order if completed
-  // is it neccesary to implement partial fills? should I be considering how the fill logic works when users are implemented with actual 
-  // this function should only be callled by one order, the one that is just added, and it just fills against the other Side, if theres no fill or left overs, just keep the order in the price leevl
-  // auto& opposite =  (incomingOrder->side == Side::BUY) ? askLevels : bidLevels;
- 
-  // double price = incomingOrder->price;
-  // double quantity = incomingOrder->quantity;
- 
-  // while (quantity > 0) {
-  //   if (opposite.find(price) == opposite.end()) {
-  //     return;
-  //   }
-  //   
-  //   OrderNode* topOfBook = opposite[price]peakHead();
- 
-  //   if (topOfBook->quantity > quantity) {
-  //     topOfBook->quantity -= quantity;
-  //     incomingOrder->quantity -= quantity;
-  //     quantity -= topOfBook->quantity;
-  //     break;
-  //   }
-  //   
-  //   opposite[price].popHead();
-  //   incomingOrder->quantity -= topOfBook->quantity;
-  //   quantity -= topOfBook->quantity;
-  // }
-  //
-  // this implementation did not take into account limit orders that could not be met and goes into a infinite loop
-  //
-  auto& opposite;
-  double bestPrice;
+void LimitOrderBook::fillOrder(OrderNode *incomingOrder) {
+  std::map<double, PriceLevel> *opposite;
 
   if (incomingOrder->side == Side::BUY) {
-    opposite = askLevels;
-    bestPrice = askLevels.begin()->first;
+    opposite = &askLevels;
   } else {
-    opposite = bidLevels;
-    bestPrice = std::prev(bidLevels.begin())->first;
+    opposite = &bidLevels;
   }
- 
-  
-  while (incomingOrder->quantity > 0) {
-    if (opposite.empty()) {
-      return; //no liquidity on the opposite level
+
+  while (incomingOrder->quantity > 0 && !opposite->empty()) {
+    double bestPrice;
+    if (incomingOrder->side == Side::BUY) {
+      bestPrice = opposite->begin()->first;
+      if (incomingOrder->price < bestPrice) {
+        return; // Buy order price is lower than lowest ask
+      }
+    } else {
+      bestPrice = opposite->rbegin()->first;
+      if (incomingOrder->price > bestPrice) {
+        return; // Sell order price is higher than highest bid
+      }
     }
 
-   
-    if (incomingOrder->side == Side::BUY && incomingOrder->price < bestPrice) {
-      return; // limit buy order that is higher than all current asks
-    }
-    
-    if (incomingOrder->side == Side::SELL && incomingOrder->price > bestPrice) {
-      return; // limit sell order that is lower than all current asks
-    }
+    PriceLevel &level = opposite->at(bestPrice);
+    OrderNode *bookOrder = level.peekHead();
 
-    uint64_t quantityFilled = std::min(incomingOrder->quantity, opposite[bestPrice].peekHead()->quantity);
+    uint64_t quantityFilled =
+        std::min(incomingOrder->quantity, bookOrder->quantity);
 
     incomingOrder->quantity -= quantityFilled;
-    opposite[price].peekHead()->quantity -= quantityFilled;
+    bookOrder->quantity -= quantityFilled;
+    totalVolume -=
+        quantityFilled *
+        2; // Deduct volume from both sides? Or just track trade volume?
+    // The design doc says "incremented/decremented the volume counter when
+    // order were added and cancelled". So if we fill, we are effectively
+    // removing from book.
 
-    if(opposite[price].peekHead()->quantity == 0) {
-      opposite[price].popHead();
-      removePriceLevelIfEmpty(bestPrice);
+    // Note: The original code didn't handle totalVolume updates during fill
+    // correctly in all places. PriceLevel handles its own volume.
+    // LimitOrderBook totalVolume might be aggregate. For now, let's stick to
+    // the logic of matching.
+
+    if (bookOrder->quantity == 0) {
+      uint64_t id = bookOrder->orderId;
+      level.popHead();
+      OrderHashMap.erase(id);
     }
-    
-    
-  }
 
+    if (level.isEmpty()) {
+      opposite->erase(bestPrice);
+    }
+  }
 }

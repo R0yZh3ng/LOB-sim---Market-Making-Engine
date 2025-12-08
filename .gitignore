@@ -1,0 +1,28 @@
+# Build directories
+build/
+cmake-build-debug/
+
+# Compiled Object files
+*.o
+*.obj
+
+# Static libraries
+*.a
+*.lib
+
+# Shared libraries
+*.so
+*.dylib
+*.dll
+
+# Executables
+*.exe
+*.out
+test_price_level
+test_order_node
+test_lob
+
+# Editor directories
+.vscode/
+.idea/
+.DS_Store
