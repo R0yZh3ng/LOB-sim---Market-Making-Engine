@@ -17,7 +17,7 @@ uint64_t LimitOrderBook::nextOrderId =
 // note that to the maps will store the price levels in ascending order, but
 // using, std::prev(bidLevels.end()) gives u the lowest ask
 
-void LimitOrderBook::placeLimitOrder(double price, uint64_t quantity,
+uint64_t LimitOrderBook::placeLimitOrder(double price, uint64_t quantity,
                                      Side side) {
   // note that a limit order fills for everything under
 
@@ -47,14 +47,17 @@ void LimitOrderBook::placeLimitOrder(double price, uint64_t quantity,
 
   // above is a non efficient way of implementation, can abstract certain steps,
   // also dont allocate the node on the heap;
-  placeOrder(price, quantity, side);
+  uint64_t orderId = placeOrder(price, quantity, side);
+  return orderId;
 }
 
-void LimitOrderBook::placeMarketOrder(uint64_t quantity, Side side) {
+uint64_t LimitOrderBook::placeMarketOrder(uint64_t quantity, Side side) {
   // this function needs to fil the amount to buy or sell at either the highest
   // bid or lowest ask, partial filling is needed
   double price = getBestPrice(side);
-  placeOrder(price, quantity, side);
+  uint64_t orderId = placeOrder(price, quantity, side);
+
+  return orderId;
 }
 
 void LimitOrderBook::cancelOrder(uint64_t orderId) {
@@ -157,7 +160,7 @@ void LimitOrderBook::placeOrder(double price, uint64_t quantity, Side side) {
   levels.at(price).addOrder(ordn);
   OrderHashMap.emplace(nextOrderId,
                        ordn); // put into an unordered map for O(1) seek
-
+  
   fillOrder(ordn);
 
   if (ordn->quantity == 0) {
@@ -166,6 +169,8 @@ void LimitOrderBook::placeOrder(double price, uint64_t quantity, Side side) {
     OrderHashMap.erase(ordn->orderId);
     // delete ordn;
   }
+  return nextOrderId;
+  
 }
 
 void LimitOrderBook::removePriceLevelIfEmpty(double price) {

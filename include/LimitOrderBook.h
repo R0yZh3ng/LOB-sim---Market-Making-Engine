@@ -42,8 +42,8 @@ private:
 public:
   LimitOrderBook();
 
-  void placeLimitOrder(double price, uint64_t quantity, Side side);
-  void placeMarketOrder(uint64_t quantity, Side side);
+  uint64_t placeLimitOrder(double price, uint64_t quantity, Side side);
+  uint64_t placeMarketOrder(uint64_t quantity, Side side);
   void cancelOrder(uint64_t orderId);
   void modifyOrder(double price, uint64_t orderId, uint64_t quantity,
                    Side side);
