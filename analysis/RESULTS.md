@@ -17,6 +17,11 @@ Two standalone programs, both built on top of the real `LimitOrderBook`
   real book at increasing depth, plus an isolated `unordered_map` vs `map`
   microbenchmark, to empirically show the O(1) vs O(log n) split the engine
   is designed around.
+- `HeapVsTreeBenchmark.cpp` -- times the real (tree-based) `LimitOrderBook`
+  against `HeapLimitOrderBook`, an alternate implementation backed by two
+  `std::priority_queue`s instead of two `std::map` price ladders, to show
+  where a heap wins (raw insert/cancel) and where it loses (lazy-deletion
+  cleanup cost on `getBestPrice()` after top-of-book churn).
 
 Build (no CMake required):
 
@@ -28,9 +33,14 @@ clang++ -std=c++17 -O2 -Iinclude -Ianalysis -IfairPriceModels \
 
 clang++ -std=c++17 -O2 -Iinclude analysis/ComplexityBenchmark.cpp src/*.cpp \
   -o complexity_benchmark
+
+clang++ -std=c++17 -O2 -Iinclude -Ianalysis analysis/HeapVsTreeBenchmark.cpp \
+  src/*.cpp -o heap_vs_tree_benchmark
 ```
 
-Or via CMake (`price_impact_study` / `complexity_benchmark` targets).
+Or via CMake (`price_impact_study` / `complexity_benchmark` /
+`heap_vs_tree_benchmark` targets). See `RUNNING.md` for the full list of
+build/run commands for every program in this repo.
 
 ## Methodology
 
@@ -51,6 +61,22 @@ scenarios so differences are attributable to `buyProbability`, not noise.
 pre-event imbalance with the mid-price change k events later, then compute
 the Pearson correlation and an OLS regression slope (the price-impact
 coefficient) across all 20,000 events.
+
+**Heap vs tree benchmark**: `HeapLimitOrderBook` swaps the real book's two
+`std::map<double, PriceLevel>` price ladders for two `std::priority_queue`s
+(max-heap for bids, min-heap for asks) plus `std::unordered_map<double,
+PriceLevel>` for the actual level data. A heap can't erase an arbitrary
+interior element cheaply, so cancelling the last order at a price level
+removes it from the level map (O(1) average) but leaves its price sitting
+in the heap; `getBestPrice()` lazily pops any such stale price off the top
+before returning a real one -- this is the standard "lazy deletion"
+technique. Part A seeds both books identically and times raw
+`placeLimitOrder`/`cancelOrder` at increasing depth. Part B specifically
+targets the lazy-deletion cost: it fires N transient orders priced above a
+small resting core book, cancelling each one immediately, then times the
+*first* `getBestPrice()` call afterward (which must pay off the entire
+backlog in one pass) against the *second* call right after (which should be
+cheap again, since the backlog was just drained).
 
 **Complexity benchmark**: Part A builds a `LimitOrderBook` with book depth N
 spread over ~N/40 distinct price levels per side, then times 5,000 sampled
@@ -96,6 +122,52 @@ simulation's price motion is exogenous (the underlying OU fair price walks
 on its own) rather than purely order-flow-driven -- a real order book would
 show a similar shape with different magnitudes depending on how much of the
 price process is endogenous to the book.
+
+### Heap-based vs tree-based LimitOrderBook
+
+**Part A -- raw insert/cancel at increasing depth** (nanoseconds/op):
+
+| book depth | tree insert | heap insert | tree cancel | heap cancel |
+|---|---|---|---|---|
+| 1,000 | 113.5 | 72.9 | 114.4 | 93.2 |
+| 5,000 | 282.0 | 163.0 | 253.2 | 197.2 |
+| 10,000 | 269.7 | 142.9 | 212.0 | 163.2 |
+| 50,000 | 365.7 | 145.4 | 259.7 | 119.7 |
+| 100,000 | 483.9 | 199.4 | 393.2 | 220.3 |
+| 200,000 | 703.6 | 159.6 | 758.7 | 423.2 |
+
+The heap wins on raw insert/cancel at every depth tested. Both container
+types are the same theoretical class here (heap push and map insert are
+both O(log P) in the number of distinct price levels), but `unordered_map`
+lookups (used for both books' order-id -> node table, and for the heap
+book's price -> level table) beat `std::map`'s pointer-chasing red-black
+tree on cache locality, so the heap version comes out ahead in practice.
+
+**Part B -- cost of the first `getBestPrice()` call after N transient
+top-of-book create+cancel events:**
+
+| churn events | stale backlog | tree 1st call | heap 1st call | heap 2nd call |
+|---|---|---|---|---|
+| 0 | 0 | 42 ns | 0 ns | 42 ns |
+| 1,000 | 1,000 | 0 ns | 79,500 ns | 42 ns |
+| 5,000 | 5,000 | 0 ns | 507,834 ns | 42 ns |
+| 20,000 | 20,000 | 0 ns | 2,288,084 ns | 41 ns |
+| 50,000 | 50,000 | 3,291 ns | 6,020,750 ns | 42 ns |
+| 100,000 | 100,000 | 0 ns | 12,363,083 ns | 42 ns |
+
+This is the actual tradeoff lazy deletion makes: cost isn't paid per
+cancel, it's deferred and paid in one lump sum by whichever caller happens
+to ask for the best price after a stretch of top-of-book churn. The heap's
+first call after churn costs ~120 ns per accumulated stale entry (scaling
+linearly with the backlog -- 100,000 churned orders costs over 12
+milliseconds for a single price lookup), while the tree-based book, which
+erases dead price levels immediately on cancel, never accumulates a
+backlog and stays flat regardless of churn history. The heap's *second*
+call right after drops straight back to ~42 ns, confirming the cost is a
+one-time payoff, not a recurring one -- so a heap-based book would be fine
+under steady insert/cancel load but pathological under bursty top-of-book
+churn (e.g. HFT quote flickering) if `getBestPrice()` isn't called
+frequently enough to keep the backlog small.
 
 ### O(1) vs O(log n): LimitOrderBook under increasing depth
 

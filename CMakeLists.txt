@@ -37,3 +37,6 @@ target_link_libraries(price_impact_study lob_lib)
 
 add_executable(complexity_benchmark analysis/ComplexityBenchmark.cpp)
 target_link_libraries(complexity_benchmark lob_lib)
+
+add_executable(heap_vs_tree_benchmark analysis/HeapVsTreeBenchmark.cpp)
+target_link_libraries(heap_vs_tree_benchmark lob_lib)
