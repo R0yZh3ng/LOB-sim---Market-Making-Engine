@@ -18,6 +18,6 @@ public:
   OrnsteinUhlenbeck(double initial, double theta, double kappa, double sigma, double dt);
 
   double update();
-  double getPrice() const {return price};
+  double getPrice() const { return price; }
 
-}
+};

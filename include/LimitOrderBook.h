@@ -35,7 +35,7 @@ private:
 
   uint64_t totalVolume;
 
-  void placeOrder(double price, uint64_t quantity, Side side);
+  uint64_t placeOrder(double price, uint64_t quantity, Side side);
   void removePriceLevelIfEmpty(double price);
   void fillOrder(OrderNode *incomingOrder); // this funciton when called match
                                             // the ask and bid side if possible
@@ -49,5 +49,6 @@ public:
                    Side side);
   double getBestPrice(Side side) const;
   uint64_t getVolumeAtPrice(double p) const;
+  bool hasOrders(Side side) const;
 };
 #endif

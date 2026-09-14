@@ -1,4 +1,5 @@
 #include "OrnsteinUhlenbeck.h"
+#include <cmath>
 
 OrnsteinUhlenbeck::OrnsteinUhlenbeck(double initial, double theta, double kappa, double sigma, double dt)
   : price(initial), theta(theta), kappa(kappa), sigma(sigma), dt(dt), rng(std::random_device{}()), normal(0.0, 1.0) {}

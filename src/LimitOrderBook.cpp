@@ -52,22 +52,29 @@ uint64_t LimitOrderBook::placeLimitOrder(double price, uint64_t quantity,
 }
 
 uint64_t LimitOrderBook::placeMarketOrder(uint64_t quantity, Side side) {
-  // this function needs to fil the amount to buy or sell at either the highest
-  // bid or lowest ask, partial filling is needed
-  double price = getBestPrice(side);
+  // A market order must cross against the OPPOSITE side of the book, not
+  // rest at its own side's best price. Sweep to the current best opposing
+  // price; any unfilled remainder rests there as a marketable limit order.
+  double price = (side == Side::BUY) ? getBestPrice(Side::SELL)
+                                      : getBestPrice(Side::BUY);
   uint64_t orderId = placeOrder(price, quantity, side);
 
   return orderId;
 }
 
 void LimitOrderBook::cancelOrder(uint64_t orderId) {
-  OrderNode *nodeToCancel = OrderHashMap[orderId];
+  auto it = OrderHashMap.find(orderId);
+  if (it == OrderHashMap.end()) {
+    throw std::invalid_argument("Order ID not found");
+  }
+
+  OrderNode *nodeToCancel = it->second;
+  double price = nodeToCancel->price; // must read before removeOrder deletes it
 
   nodeToCancel->parentLevel->removeOrder(nodeToCancel);
+  OrderHashMap.erase(it);
 
-  removePriceLevelIfEmpty(nodeToCancel->price);
-
-  // note to self need to implement the remove price level logic later
+  removePriceLevelIfEmpty(price);
 }
 
 void LimitOrderBook::modifyOrder(double price, uint64_t orderId,
@@ -85,8 +92,9 @@ void LimitOrderBook::modifyOrder(double price, uint64_t orderId,
   uint64_t originalQuantity = order->quantity;
 
   if (originalPrice != price || originalQuantity != quantity) {
-    // Remove from old price level
-    order->parentLevel->removeOrder(order);
+    // Unlink from old price level without deleting the node -- it is being
+    // relocated, not cancelled, and callers keep referring to it by orderId
+    order->parentLevel->unlinkOrder(order);
     removePriceLevelIfEmpty(originalPrice);
 
     // Update order details
@@ -122,6 +130,10 @@ double LimitOrderBook::getBestPrice(Side side) const {
   throw std::invalid_argument("side must be either buy or sell");
 }
 
+bool LimitOrderBook::hasOrders(Side side) const {
+  return side == Side::BUY ? !bidLevels.empty() : !askLevels.empty();
+}
+
 uint64_t LimitOrderBook::getVolumeAtPrice(double price) const {
   uint64_t volume = 0;
   if (askLevels.count(price)) {
@@ -136,7 +148,7 @@ uint64_t LimitOrderBook::getVolumeAtPrice(double price) const {
 // private helpers below
 // here;////////////////////////////////////////////////////////////////////
 
-void LimitOrderBook::placeOrder(double price, uint64_t quantity, Side side) {
+uint64_t LimitOrderBook::placeOrder(double price, uint64_t quantity, Side side) {
   if (side != Side::BUY && side != Side::SELL) {
     throw std::invalid_argument("orderType must be of either buy or sell");
   }
@@ -164,13 +176,17 @@ void LimitOrderBook::placeOrder(double price, uint64_t quantity, Side side) {
   fillOrder(ordn);
 
   if (ordn->quantity == 0) {
+    // Must capture these before removeOrder deletes ordn -- reading
+    // ordn->price/orderId afterwards would be a use-after-free.
+    double filledPrice = ordn->price;
+    uint64_t filledOrderId = ordn->orderId;
+
     ordn->parentLevel->removeOrder(ordn);
-    removePriceLevelIfEmpty(ordn->price);
-    OrderHashMap.erase(ordn->orderId);
-    // delete ordn;
+    removePriceLevelIfEmpty(filledPrice);
+    OrderHashMap.erase(filledOrderId);
   }
   return nextOrderId;
-  
+
 }
 
 void LimitOrderBook::removePriceLevelIfEmpty(double price) {

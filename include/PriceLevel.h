@@ -23,6 +23,10 @@ public:
 
   void addOrder(OrderNode *orderNode);
   void removeOrder(OrderNode *orderNode);
+  void unlinkOrder(OrderNode *orderNode); // same bookkeeping as removeOrder but
+                                          // does not delete the node, for
+                                          // relocating an order to another
+                                          // price level (modify)
 
   OrderNode *peekHead();
   void popHead();

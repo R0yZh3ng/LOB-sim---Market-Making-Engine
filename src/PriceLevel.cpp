@@ -23,6 +23,11 @@ void PriceLevel::addOrder(OrderNode *orderNode) {
   orderCount++;
 }
 void PriceLevel::removeOrder(OrderNode *orderNode) {
+  unlinkOrder(orderNode);
+  delete orderNode;
+}
+
+void PriceLevel::unlinkOrder(OrderNode *orderNode) {
   if (orderNode == nullptr) {
     throw std::invalid_argument(
         "the orderNode is not suppose to be non-existent on the price level");
@@ -41,7 +46,6 @@ void PriceLevel::removeOrder(OrderNode *orderNode) {
     // implied that removing this order would just clear the queue
     head = nullptr;
     tail = nullptr;
-    delete orderNode;
     return;
   }
   // case where node to remove is the head
@@ -49,7 +53,6 @@ void PriceLevel::removeOrder(OrderNode *orderNode) {
     head = head->next;
     head->previous = nullptr; // dont forget to make the previous head nullptr
                               // after changing to the next in line
-    delete orderNode;
     return;
   }
   // case where the node to remove is the tail
@@ -57,7 +60,6 @@ void PriceLevel::removeOrder(OrderNode *orderNode) {
     tail = tail->previous;
     tail->next = nullptr; // dont forget to make the previous tail pointer
                           // nullptr after changing to previous element
-    delete orderNode;
     return;
   }
 
@@ -66,8 +68,6 @@ void PriceLevel::removeOrder(OrderNode *orderNode) {
   OrderNode *next = orderNode->next;
   prev->next = next;
   next->previous = prev;
-
-  delete orderNode;
 }
 
 OrderNode *PriceLevel::peekHead() {

@@ -21,4 +21,4 @@ private:
 
   double inventory = 0;
 
-}
+};

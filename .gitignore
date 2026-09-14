@@ -22,6 +22,9 @@ test_price_level
 test_order_node
 test_lob
 
+# Generated analysis output (regenerate via price_impact_study)
+analysis/output/
+
 # Editor directories
 .vscode/
 .idea/
