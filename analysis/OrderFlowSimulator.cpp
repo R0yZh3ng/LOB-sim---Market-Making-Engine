@@ -3,7 +3,8 @@
 #include <stdexcept>
 
 OrderFlowSimulator::OrderFlowSimulator(const SimulationConfig &c)
-    : cfg(c), lob(), ou(c.initialFairPrice, c.ouTheta, c.ouKappa, c.ouSigma, c.ouDt),
+    : cfg(c), lob(), ou(c.initialFairPrice, c.ouTheta, c.ouKappa, c.ouSigma, c.ouDt,
+         c.seed + 1), // offset so the two generators don't share a stream
       rng(c.seed), uniform01(0.0, 1.0) {}
 
 double OrderFlowSimulator::roundToTick(double price) const {

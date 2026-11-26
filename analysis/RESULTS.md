@@ -48,14 +48,18 @@ build/run commands for every program in this repo.
 drives a latent fair price. Each event, a synthetic order arrives whose side
 is drawn with a fixed `buyProbability` (the "controlled" flow parameter),
 sized randomly, and priced either passively near the fair price or
-aggressively enough to cross and sweep the book (probability
+at the best opposing price so that it crosses the spread (probability
 `aggressiveProbability`). A cancellation-churn step removes random resting
 orders each event so the book reaches a steady-state depth instead of
 growing without bound. Before each event we record best bid/ask, mid price,
 spread, and top-of-book volume imbalance
 `(bidVol - askVol) / (bidVol + askVol)`; after the event we record the
-resulting mid price. 20,000 events per scenario, fixed RNG seed across
-scenarios so differences are attributable to `buyProbability`, not noise.
+resulting mid price. Each scenario runs 20,000 events with the same seed (42).
+The order flow generator uses the seed and the fair price model uses seed + 1,
+so the two don't share a random stream. The same seed gives the same output on
+the same toolchain. Standard library distributions can differ between
+implementations. A shared seed doesn't remove sampling noise, so the main
+comparisons are also checked across 30 seeds.
 
 **Price impact**: for horizons k = 1, 5, 10, 20 events, we pair each event's
 pre-event imbalance with the mid-price change k events later, then compute
@@ -88,40 +92,56 @@ isolates the two container types directly (`unordered_map<uint64_t,...>` vs
 lookups) to show the underlying complexity classes without the linked-list
 matching mechanics in the way.
 
-## Results (representative run; see `analysis/output/*.csv` for raw data)
+## Results
+
+The price impact tables below are from seed 42, built with g++ and libstdc++.
+Running `price_impact_study` also writes the raw data to
+`analysis/output/*.csv`. The benchmark tables further down are from an earlier
+representative run, and timings vary by machine.
 
 ### Mid-price / spread dynamics under controlled order flow
 
 | scenario | buyProbability | mean spread | spread std | mid-price step std dev |
 |---|---|---|---|---|
-| sell_heavy_flow | 0.35 | 0.0364 | 0.0306 | 0.0120 |
-| neutral_flow | 0.50 | 0.0318 | 0.0262 | 0.0105 |
-| buy_heavy_flow | 0.65 | 0.0337 | 0.0275 | 0.0110 |
+| sell_heavy_flow | 0.35 | 0.0369 | 0.0324 | 0.0129 |
+| neutral_flow | 0.50 | 0.0309 | 0.0248 | 0.0103 |
+| buy_heavy_flow | 0.65 | 0.0345 | 0.0294 | 0.0118 |
 
-Skewing order flow away from neutral (in either direction) widens the mean
-spread and raises mid-price volatility relative to the neutral baseline --
-consistent with one-sided flow consuming liquidity faster than it's
-replenished on that side.
+Skewing order flow away from neutral in either direction widens the mean spread
+and raises mid-price volatility. In 30 of 30 other seeds, both skewed scenarios
+had a wider spread and higher volatility than neutral. A likely explanation is
+that one-sided flow consumes liquidity on one side faster than it is
+replenished, but this study doesn't test that.
 
 ### Queue imbalance -> forward price impact (neutral_flow scenario)
 
 | horizon (events ahead) | corr(imbalance, fwd Δmid) | OLS slope | R^2 |
 |---|---|---|---|
-| k=1  | 0.129 | 0.0023 | 0.017 |
-| k=5  | 0.222 | 0.0081 | 0.049 |
-| k=10 | 0.267 | 0.0128 | 0.071 |
-| k=20 | 0.293 | 0.0181 | 0.086 |
+| k=1  | 0.167 | 0.0027 | 0.028 |
+| k=5  | 0.274 | 0.0091 | 0.075 |
+| k=10 | 0.306 | 0.0135 | 0.094 |
+| k=20 | 0.310 | 0.0179 | 0.096 |
 
-Sign and shape are the expected microstructure result: more resting bid
-volume than ask volume at the top of book predicts the mid price drifting
-*up* over the following events, and the relationship strengthens as the
-horizon lengthens (more of the imbalance's information gets realized into
-price) before presumably decaying at longer horizons than tested here.
-Magnitudes are modest (R^2 under 10%) because a large share of this
-simulation's price motion is exogenous (the underlying OU fair price walks
-on its own) rather than purely order-flow-driven -- a real order book would
-show a similar shape with different magnitudes depending on how much of the
-price process is endogenous to the book.
+More resting bid volume than ask volume at the top of book predicts the mid
+price moving *up* over the following events. The correlation rises quickly up to
+about k=5-10 and then mostly levels off. The OLS slope is still rising at k=20.
+
+Across 30 other seeds (neutral flow):
+
+| horizon | mean corr | std dev across seeds | seeds with positive corr |
+|---|---|---|---|
+| k=1   | 0.175 | 0.005 | 30/30 |
+| k=5   | 0.288 | 0.013 | 30/30 |
+| k=10  | 0.313 | 0.015 | 30/30 |
+| k=20  | 0.318 | 0.018 | 30/30 |
+| k=50  | 0.334 | 0.019 | 30/30 |
+| k=100 | 0.347 | 0.018 | 30/30 |
+
+No decay appears up to k=100. The skewed scenarios show similar correlations.
+R^2 is about 0.10 or less in the seed 42 neutral run, so imbalance explains only
+a small part of forward price changes. One likely reason is that the OU fair
+price moves independently of the book. These results describe this simulator
+and haven't been compared with real market data.
 
 ### Heap-based vs tree-based LimitOrderBook
 
@@ -229,3 +249,13 @@ still passes. A fourth bug -- `placeMarketOrder` priced against
 market order never actually crossed the book -- was fixed too, though the
 analysis tooling here doesn't call it directly (it builds marketable orders
 manually via `placeLimitOrder` for tighter control over the simulation).
+
+Two later fixes changed the price impact results:
+
+- **Level volume:** fills didn't reduce a price level's total volume, so the
+  imbalance was computed from overstated volumes. With seeding fixed in both
+  runs (seed 42, neutral flow), fixing this raised the correlation from 0.113 to
+  0.167 at k=1, 0.193 to 0.274 at k=5, 0.233 to 0.306 at k=10 and 0.280 to 0.310
+  at k=20. Spread and mid-price figures didn't change.
+- **Seeding:** the OU model was seeded from `std::random_device`, so earlier
+  runs couldn't be reproduced.

@@ -2,7 +2,7 @@
 
 A C++17 limit order book with price-time priority, intended to grow into a market making simulator and backtester.
 
-> **Status: early development.** The project builds and its tests pass, but reported volume is wrong after fills. This affects the queue imbalance results. See [Known issues](#known-issues).
+> **Status: early development.** The order book, its tests and the analysis programs work, but the engine is incomplete. See [Known issues](#known-issues).
 
 ## Goals
 
@@ -63,8 +63,6 @@ Then run the tests:
 ./build/test_lob
 ```
 
-Passing tests don't cover everything: volume after a partial fill isn't tested, and the matching test prints the volume without asserting on it.
-
 The tests rely on `assert`, so don't build them with `NDEBUG` defined (CMake's `Release` configuration defines it), or the checks are skipped.
 
 To look for memory errors, use a separate sanitizer build:
@@ -78,7 +76,7 @@ cmake --build build-asan
 
 ## Analysis and benchmarks
 
-The build also produces `price_impact_study`, `complexity_benchmark` and `heap_vs_tree_benchmark`. [RUNNING.md](RUNNING.md) explains how to run them, and [analysis/RESULTS.md](analysis/RESULTS.md) describes the method and a sample run. Read [Known issues](#known-issues) before relying on the price impact numbers. Timing results depend on the machine and build settings.
+The build also produces `price_impact_study`, `complexity_benchmark` and `heap_vs_tree_benchmark`. [RUNNING.md](RUNNING.md) explains how to run them, and [analysis/RESULTS.md](analysis/RESULTS.md) describes the method and a sample run. `price_impact_study` uses a fixed seed, so repeated runs on the same toolchain give the same output. Timing results depend on the machine and build settings.
 
 ## Architecture
 
@@ -133,7 +131,7 @@ Intended costs, where *P* is the number of price levels on a side:
 | `void cancelOrder(uint64_t orderId)` | Removes a resting order. Throws `std::invalid_argument` if the ID is unknown, already cancelled or fully filled. |
 | `void modifyOrder(double price, uint64_t orderId, uint64_t quantity, Side side)` | Changes price and quantity, moving the order to the back of the queue. It doesn't match the result. `side` must be the order's original side, but this isn't checked. Throws `std::invalid_argument` for an unknown ID. |
 | `double getBestPrice(Side side) const` | Returns the highest bid for `BUY` or the lowest ask for `SELL`. Throws `std::invalid_argument` if that side is empty. |
-| `uint64_t getVolumeAtPrice(double price) const` | Returns the combined bid and ask volume at a price, or 0 if there is no level. Overstated after fills. |
+| `uint64_t getVolumeAtPrice(double price) const` | Returns the combined bid and ask volume at a price, or 0 if there is no level. |
 | `bool hasOrders(Side side) const` | Returns whether that side has any resting orders. |
 
 The book frees its resting orders when destroyed and can't be copied.
@@ -148,7 +146,7 @@ book.placeLimitOrder(101.0, 10, Side::SELL);   // rests on the ask side
 book.placeLimitOrder(101.0, 4, Side::BUY);     // fills 4 against it
 
 book.getBestPrice(Side::SELL);                 // 101.0
-book.getVolumeAtPrice(101.0);                  // returns 10, should be 6 (known issue)
+book.getVolumeAtPrice(101.0);                  // 6
 ```
 
 ## Fair price model
@@ -166,10 +164,11 @@ price += kappa * (theta - price) * dt + sigma * sqrt(dt) * Z,    Z ~ N(0, 1)
 | `kappa` | Speed of mean reversion |
 | `sigma` | Volatility |
 | `dt` | Time step per `update()` call |
+| `seed` | Random generator seed |
 
 `update()` advances one step and returns the new price. `getPrice()` returns the current price.
 
-The generator is seeded from `std::random_device`, so runs are not reproducible. The determinism goal requires a caller-supplied seed.
+The same parameters and seed give the same price path on the same toolchain. `std::normal_distribution` can differ between standard library implementations. If another generator runs alongside the model, give it a different seed.
 
 ## Market making agent
 
@@ -187,8 +186,6 @@ Because `cancelOrder` throws for a filled order, `update` throws if a previous q
 
 ## Known issues
 
-- **Level volume:** fills reduce an order's quantity but not its level's `totalVolume`, so `getVolumeAtPrice` overstates volume at any level that has had fills. `price_impact_study` uses it to compute queue imbalance, so the imbalance and price impact figures are affected. Rerun the study after fixing this. `HeapLimitOrderBook` has the same bug.
-- **Reproducibility:** `OrnsteinUhlenbeck` ignores the simulation seed, so `price_impact_study` gives different results on each run, even though [analysis/RESULTS.md](analysis/RESULTS.md) describes a fixed seed.
 - **Market maker:** `simpleMM::update` doesn't handle the exception from cancelling a filled quote.
 - **Market orders:** they don't sweep past the best opposing level, and the unfilled remainder rests on the book.
 - **Modify:** a modified order that crosses the spread isn't matched.
@@ -201,9 +198,9 @@ Because `cancelOrder` throws for a filled order, `update` throws if a previous q
 
 Suggested order of work:
 
-1. Fix level volume, add assertions for matching and partial fills, then rerun the price impact study.
-2. Make the fair price model seedable.
-3. Fix market orders and modify, and report trades from the matching loop.
+1. Fix market orders and modify.
+2. Report trades from the matching loop.
+3. Use integer ticks for prices.
 4. Add risk and clearing so each user's inventory is tracked from fills.
 5. Connect the market maker to the simulator and handle filled quotes.
 6. Implement events and the event loop.

@@ -15,7 +15,7 @@ private:
   std::normal_distribution<double> normal;
 
 public: 
-  OrnsteinUhlenbeck(double initial, double theta, double kappa, double sigma, double dt);
+  OrnsteinUhlenbeck(double initial, double theta, double kappa, double sigma, double dt, unsigned int seed);
 
   double update();
   double getPrice() const { return price; }

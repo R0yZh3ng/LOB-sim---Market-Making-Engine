@@ -160,6 +160,9 @@ void HeapLimitOrderBook::fillOrder(OrderNode *incomingOrder) {
 
     incomingOrder->quantity -= quantityFilled;
     bookOrder->quantity -= quantityFilled;
+    // both orders are resting in a level, so keep each level's volume in step
+    level.totalVolume -= quantityFilled;
+    incomingOrder->parentLevel->totalVolume -= quantityFilled;
     totalVolume -= quantityFilled * 2;
 
     if (bookOrder->quantity == 0) {

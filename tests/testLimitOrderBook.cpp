@@ -38,7 +38,9 @@ void testLimitOrderBookMatching() {
 
   try {
     std::cout << "Getting volume..." << std::endl;
-    lob.getVolumeAtPrice(100.0);
+    assert(lob.getVolumeAtPrice(100.0) == 0);
+    assert(!lob.hasOrders(Side::BUY));
+    assert(!lob.hasOrders(Side::SELL));
     std::cout << "Volume at 100.0: " << lob.getVolumeAtPrice(100.0)
               << std::endl;
   } catch (const std::out_of_range &e) {
@@ -84,10 +86,41 @@ void testLimitOrderBookOrderLifetime() {
   std::cout << "testLimitOrderBookOrderLifetime passed" << std::endl;
 }
 
+void testLimitOrderBookFillVolume() {
+  LimitOrderBook lob;
+
+  // resting order partially filled
+  uint64_t ask = lob.placeLimitOrder(100.0, 10, Side::SELL);
+  lob.placeLimitOrder(100.0, 4, Side::BUY);
+  assert(lob.getVolumeAtPrice(100.0) == 6);
+
+  // cancelling the remainder leaves later orders counted correctly
+  lob.placeLimitOrder(100.0, 3, Side::SELL);
+  lob.cancelOrder(ask);
+  assert(lob.getVolumeAtPrice(100.0) == 3);
+
+  // one order sweeps two levels, using up the first and part of the second
+  lob.placeLimitOrder(101.0, 5, Side::SELL);
+  lob.placeLimitOrder(101.0, 5, Side::SELL);
+  lob.placeLimitOrder(101.0, 10, Side::BUY);
+  assert(lob.getVolumeAtPrice(100.0) == 0);
+  assert(lob.getVolumeAtPrice(101.0) == 3);
+
+  // incoming order partially fills and rests alongside another order
+  lob.placeLimitOrder(102.0, 2, Side::BUY); // takes 2 of the ask at 101
+  lob.placeLimitOrder(101.0, 1, Side::SELL);
+  lob.placeLimitOrder(101.0, 8, Side::BUY); // takes 2, rests 6
+  assert(!lob.hasOrders(Side::SELL));
+  assert(lob.getVolumeAtPrice(101.0) == 6);
+
+  std::cout << "testLimitOrderBookFillVolume passed" << std::endl;
+}
+
 int main() {
   testLimitOrderBookPlaceOrder();
   testLimitOrderBookMatching();
   testLimitOrderBookOrderLifetime();
+  testLimitOrderBookFillVolume();
   std::cout << "All LimitOrderBook tests passed!" << std::endl;
   return 0;
 }
