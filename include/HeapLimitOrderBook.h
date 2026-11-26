@@ -43,6 +43,9 @@ private:
 
 public:
   HeapLimitOrderBook();
+  ~HeapLimitOrderBook();
+  HeapLimitOrderBook(const HeapLimitOrderBook &) = delete;
+  HeapLimitOrderBook &operator=(const HeapLimitOrderBook &) = delete;
 
   uint64_t placeLimitOrder(double price, uint64_t quantity, Side side);
   void cancelOrder(uint64_t orderId);

@@ -9,6 +9,12 @@
 HeapLimitOrderBook::HeapLimitOrderBook() : totalVolume(0) {}
 uint64_t HeapLimitOrderBook::nextOrderId = 0;
 
+HeapLimitOrderBook::~HeapLimitOrderBook() {
+  for (auto &entry : OrderHashMap) {
+    delete entry.second;
+  }
+}
+
 uint64_t HeapLimitOrderBook::placeLimitOrder(double price, uint64_t quantity,
                                               Side side) {
   return placeOrder(price, quantity, side);

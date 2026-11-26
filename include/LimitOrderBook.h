@@ -41,6 +41,11 @@ private:
                                             // the ask and bid side if possible
 public:
   LimitOrderBook();
+  ~LimitOrderBook();
+
+  // the book owns its OrderNodes, so a shallow copy would double delete them
+  LimitOrderBook(const LimitOrderBook &) = delete;
+  LimitOrderBook &operator=(const LimitOrderBook &) = delete;
 
   uint64_t placeLimitOrder(double price, uint64_t quantity, Side side);
   uint64_t placeMarketOrder(uint64_t quantity, Side side);

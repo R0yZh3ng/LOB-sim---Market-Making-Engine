@@ -33,7 +33,7 @@ target_link_libraries(test_lob lob_lib)
 add_executable(price_impact_study
   analysis/PriceImpactStudy.cpp
   analysis/OrderFlowSimulator.cpp)
-target_link_libraries(price_impact_study lob_lib)
+target_link_libraries(price_impact_study mm_lib)
 
 add_executable(complexity_benchmark analysis/ComplexityBenchmark.cpp)
 target_link_libraries(complexity_benchmark lob_lib)

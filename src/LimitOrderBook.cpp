@@ -9,6 +9,12 @@
 
 LimitOrderBook::LimitOrderBook()
     : totalVolume(0) {} // maps automatically initiate empty
+LimitOrderBook::~LimitOrderBook() {
+  for (auto &entry : OrderHashMap) {
+    delete entry.second;
+  }
+}
+
 uint64_t LimitOrderBook::nextOrderId =
     0; // initialize global id counter to ensure quick unique orders, should not
        // be cleared and the uint_64 makes sure the orders will never exceed the

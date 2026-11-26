@@ -23,9 +23,9 @@ void testPriceLevelAddOrder() {
   assert(order2->previous == order1);
 
   std::cout << "testPriceLevelAddOrder passed" << std::endl;
-  // Cleanup not strictly necessary for simple test but good practice
-  // Note: PriceLevel doesn't own nodes for deletion in this test context unless
-  // we pop
+  // PriceLevel only deletes nodes that are removed or popped
+  level.popHead();
+  level.popHead();
 }
 
 void testPriceLevelRemoveOrder() {
